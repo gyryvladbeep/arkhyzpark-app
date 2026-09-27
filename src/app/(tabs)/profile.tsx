@@ -57,6 +57,7 @@ export default function ProfileScreen() {
             <ListItem icon="color-palette-outline" title="Оформление профиля" subtitle="Рамки, титулы, цвета, темы" onPress={() => router.push('/wardrobe')} />
             <ListItem icon="globe-outline" title="Лента" subtitle={`Опубликовано: ${sessions.filter((s) => s.published).length}`} onPress={() => router.push('/feed')} />
             <ListItem icon="gift-outline" title="Призы" subtitle="Реальные награды за достижения" onPress={() => router.push('/prizes')} />
+            <ListItem icon="construct-outline" title="Для тестировщика" subtitle="Разрешения, хранилище, уведомления, сброс данных" onPress={() => router.push('/debug')} />
           </Card>
         </Section>
 

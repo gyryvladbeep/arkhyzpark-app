@@ -34,7 +34,10 @@ export const trails: Trail[] = [
   t('t7', 'Долинная', 'green', [[70, 110], [56, 118], [33, 127]]),
 ];
 
-export const trailById = (id: string) => trails.find((x) => x.id === id)!;
+// Спуск, записанный по GPS: трассу по черновой схеме определить нельзя
+const gpsTrail: Trail = { id: 'gps', name: 'Спуск по GPS', level: 'blue', lengthM: 0, dropM: 0, path: [[50, 10], [50, 130]] };
+
+export const trailById = (id: string) => trails.find((x) => x.id === id) ?? gpsTrail;
 
 export const levelName: Record<Trail['level'], string> = {
   green: 'Зелёная',

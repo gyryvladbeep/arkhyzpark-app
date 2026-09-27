@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, TextInput, View } from 'react-native';
 
 import { Avatar, BackHeader, Button, Card, Chip, Icon, Row, Screen, T, usePalette } from '@/components/ui';
 import { instructorById } from '@/data/mock';
 import type { BookingRequest } from '@/data/types';
+import { useOnline } from '@/logic/network';
+import { scheduleBookingReminder } from '@/logic/notify';
 import { fmtDate } from '@/logic/stats';
 import { useStore } from '@/logic/store';
 import { base, radius, space } from '@/theme/theme';
@@ -13,7 +15,8 @@ const formats: BookingRequest['format'][] = ['Индивидуально', 'Гр
 
 export default function BookingScreen() {
   const { id, time: preTime } = useLocalSearchParams<{ id: string; time?: string }>();
-  const { addBooking, children } = useStore();
+  const { addBooking, children, bookings } = useStore();
+  const { online } = useOnline();
   const pal = usePalette();
   const group = id === 'group';
   const i = instructorById(group ? 'any' : id);
@@ -29,26 +32,49 @@ export default function BookingScreen() {
   const [people, setPeople] = useState(group ? 8 : 1);
   const [phone, setPhone] = useState('+7 ');
   const [comment, setComment] = useState('');
-  const [sent, setSent] = useState(false);
+  const [sentId, setSentId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const sentBooking = bookings.find((b) => b.id === sentId);
 
   const submit = () => {
+    // Защита от двойного нажатия: пока заявка создаётся, кнопка неактивна
+    if (submitting) return;
+    setSubmitting(true);
+    const bid = 'b' + Date.now();
     addBooking({
-      id: 'b' + Date.now(), instructorId: group ? 'any' : i.id, date, time, format, participants: people,
-      phone, comment, status: 'Отправлена', createdAt: new Date().toISOString().slice(0, 10),
+      id: bid, instructorId: group ? 'any' : i.id, date, time, format, participants: people,
+      phone, comment, status: 'В очереди', createdAt: new Date().toISOString().slice(0, 10),
+      // Ключ создаётся ОДИН раз на заявку. Повторные отправки идут с тем же ключом,
+      // поэтому сервер не создаст дубль, даже если ответ потерялся в плохой сети.
+      idempotencyKey: `${bid}-${Math.random().toString(36).slice(2, 10)}`,
     });
-    setSent(true);
+    // Демо: напоминание придёт через 15 секунд — успейте свернуть приложение и проверить
+    scheduleBookingReminder(group ? 'от Архызпарка' : i.name, `${fmtDate(date)}, ${time}`);
+    setSentId(bid);
   };
 
-  if (sent) {
+  if (sentId) {
+    const queued = !sentBooking || sentBooking.status === 'В очереди';
+    const waitingNet = queued && !online;
     return (
       <Screen>
         <View style={{ alignItems: 'center', marginTop: space.xxl * 2 }}>
-          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: pal.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="paper-plane" size={36} color={pal.accentText} />
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: waitingNet ? 'rgba(242,184,75,0.14)' : pal.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+            {queued && !waitingNet ? (
+              <ActivityIndicator color={pal.accentText} />
+            ) : (
+              <Icon name={waitingNet ? 'cloud-offline' : 'paper-plane'} size={36} color={waitingNet ? base.warning : pal.accentText} />
+            )}
           </View>
-          <T v="h2" style={{ marginTop: space.l }}>Заявка отправлена</T>
+          <T v="h2" style={{ marginTop: space.l }}>
+            {waitingNet ? 'Нет сети' : queued ? 'Отправляем…' : 'Заявка отправлена'}
+          </T>
           <T color={base.textDim} style={{ textAlign: 'center', marginTop: space.s }}>
-            Менеджер Архызпарка получил её в Max и перезвонит на {phone.trim() || 'ваш номер'}, чтобы подтвердить время. Статус появится в разделе «Мои брони».
+            {waitingNet
+              ? 'Заявка сохранена на телефоне и отправится сама, как только появится интернет. Приложение можно закрыть.'
+              : queued
+                ? sentBooking?.lastError ? `${sentBooking.lastError}. Повторим автоматически.` : 'Связываемся с сервером Архызпарка.'
+                : `Менеджер Архызпарка получил её в Max и перезвонит на ${phone.trim() || 'ваш номер'}, чтобы подтвердить время. Через 15 секунд придёт демо-напоминание о занятии.`}
           </T>
         </View>
         <Button title="Мои брони" icon="calendar" onPress={() => router.replace('/bookings')} style={{ marginTop: space.xxl }} />
@@ -105,7 +131,7 @@ export default function BookingScreen() {
       <Label text="Комментарий" />
       <Input value={comment} onChangeText={setComment} placeholder="Уровень, пожелания, вопросы" multiline />
 
-      <Button title="Отправить заявку" icon="paper-plane" onPress={submit} disabled={phone.replace(/\D/g, '').length < 11} style={{ marginTop: space.xl, height: 56 }} />
+      <Button title="Отправить заявку" icon="paper-plane" onPress={submit} disabled={submitting || phone.replace(/\D/g, '').length < 11} style={{ marginTop: space.xl, height: 56 }} />
       <T v="label" style={{ textAlign: 'center', marginTop: space.s }}>Без оплаты. Онлайн-оплату добавим позже.</T>
     </Screen>
   );

@@ -13,7 +13,7 @@ export function winterSummary(s: WinterSession) {
   const maxSpeed = Math.max(0, ...s.runs.map((r) => r.maxSpeed));
   const avgSpeed = runs ? Math.round(s.runs.reduce((a, r) => a + r.avgSpeed, 0) / runs) : 0;
   const rideMin = Math.round(s.runs.reduce((a, r) => a + r.durationSec, 0) / 60);
-  const distanceKm = s.runs.reduce((a, r) => a + trailById(r.trailId).lengthM, 0) / 1000;
+  const distanceKm = s.runs.reduce((a, r) => a + (r.distanceM ?? trailById(r.trailId).lengthM), 0) / 1000;
   const best = [...s.runs].sort((a, b) => b.maxSpeed - a.maxSpeed)[0];
   const fastest = best ? trailById(best.trailId) : undefined;
   const bestRunSec = best ? best.durationSec : 0;
@@ -44,7 +44,7 @@ export function computeMetrics(sessions: Session[], manual: Record<string, numbe
   m.bestDayVertical = Math.max(0, ...w.map((x) => x.runs.reduce((a, r) => a + r.dropM, 0)));
   m.totalRuns = allRuns.length;
   m.bestDayRuns = Math.max(0, ...w.map((x) => x.runs.length));
-  m.distinctTrails = new Set(allRuns.map((r) => r.trailId)).size;
+  m.distinctTrails = new Set(allRuns.map((r) => r.trailId).filter((id) => id !== 'gps')).size;
   for (const id of ['t1', 't2', 't3', 't4', 't5', 't6', 't7']) m['run_' + id] = allRuns.filter((r) => r.trailId === id).length;
   const days = [...new Set(w.map((x) => x.date))].sort();
   m.skiDays = days.length;
@@ -181,10 +181,13 @@ export function diaryText(s: Session, dayIndex: number): { title: string; body: 
     const w = winterSummary(s);
     const gear = s.gear === 'ski' ? 'на лыжах' : 'на сноуборде';
     const who = s.instructorId ? ` Занимались с инструктором: ${instructorById(s.instructorId).name}.` : '';
-    const trail = w.fastest ? ` Самый быстрый спуск на трассе «${w.fastest.name}» (${levelName[w.fastest.level].toLowerCase()}) — ${w.maxSpeed} км/ч.` : '';
+    const trail = !w.fastest ? '' : w.fastest.id === 'gps'
+      ? ` Самый быстрый спуск — ${w.maxSpeed} км/ч.`
+      : ` Самый быстрый спуск на трассе «${w.fastest.name}» (${levelName[w.fastest.level].toLowerCase()}) — ${w.maxSpeed} км/ч.`;
+    const src = s.source === 'gps' ? ' Записано по GPS.' : '';
     return {
       title: `День ${dayIndex}. Катание ${gear}`,
-      body: `${pl(w.runs, ['спуск', 'спуска', 'спусков'])} и ${fmtNum(w.vertical)} м вертикали.${trail}${who}`,
+      body: `${pl(w.runs, ['спуск', 'спуска', 'спусков'])} и ${fmtNum(w.vertical)} м вертикали.${trail}${who}${src}`,
     };
   }
   const r = routeById(s.routeId);

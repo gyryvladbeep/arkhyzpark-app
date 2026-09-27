@@ -123,3 +123,54 @@ export function ElevationChart({ values, color, height = 90 }: { values: number[
     </View>
   );
 }
+
+// Реальный GPS-трек: проецируем широту и долготу на прямоугольник (для небольшого района искажения незаметны)
+export function TrackView({ points, color, height = 280, live }: { points: { lat: number; lon: number }[]; color: string; height?: number; live?: boolean }) {
+  const W = 100;
+  const H = 100;
+  if (points.length < 2) {
+    return (
+      <View style={{ height, borderRadius: 18, backgroundColor: '#0E1621', borderWidth: 1, borderColor: base.border, alignItems: 'center', justifyContent: 'center' }}>
+        <Svg width={60} height={60} viewBox="0 0 60 60">
+          <Circle cx={30} cy={30} r={6} fill={color} />
+          <Circle cx={30} cy={30} r={16} stroke={color} strokeWidth={1.5} fill="none" opacity={0.5} />
+          <Circle cx={30} cy={30} r={27} stroke={color} strokeWidth={1} fill="none" opacity={0.25} />
+        </Svg>
+      </View>
+    );
+  }
+  const lats = points.map((p) => p.lat);
+  const lons = points.map((p) => p.lon);
+  const k = Math.cos(((Math.min(...lats) + Math.max(...lats)) / 2) * (Math.PI / 180));
+  const minX = Math.min(...lons) * k;
+  const maxX = Math.max(...lons) * k;
+  const minY = Math.min(...lats);
+  const maxY = Math.max(...lats);
+  const span = Math.max(maxX - minX, maxY - minY, 0.0002);
+  const pad = 8;
+  const sc = (W - pad * 2) / span;
+  const offX = (W - (maxX - minX) * sc) / 2;
+  const offY = (H - (maxY - minY) * sc) / 2;
+  const xy = points.map((p) => [offX + (p.lon * k - minX) * sc, H - (offY + (p.lat - minY) * sc)] as const);
+  const str = xy.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+  const [sx, sy] = xy[0];
+  const [ex, ey] = xy[xy.length - 1];
+  return (
+    <View style={{ height, borderRadius: 18, overflow: 'hidden', backgroundColor: '#0E1621', borderWidth: 1, borderColor: base.border }}>
+      <Svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
+        <Polyline points={str} stroke={color} strokeWidth={3} opacity={0.2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Polyline points={str} stroke={color} strokeWidth={1.2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Circle cx={sx} cy={sy} r={1.8} fill={base.bg} stroke={color} strokeWidth={0.8} />
+        {live ? (
+          <G>
+            <Circle cx={ex} cy={ey} r={4} fill={color} opacity={0.3} />
+            <Circle cx={ex} cy={ey} r={2} fill="#fff" stroke={color} strokeWidth={0.8} />
+          </G>
+        ) : (
+          <Rect x={ex - 1.6} y={ey - 1.6} width={3.2} height={3.2} fill={color} />
+        )}
+        <SvgText x={2} y={H - 2} fontSize={3} fill={base.textMute}>Трек GPS · {points.length} точек</SvgText>
+      </Svg>
+    </View>
+  );
+}

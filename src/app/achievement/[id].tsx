@@ -1,8 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import { AchievementBadge, BackHeader, Button, Card, Icon, ProgressBar, Row, Screen, Section, T, usePalette } from '@/components/ui';
 import { achievementById, categoryName, cosmeticById } from '@/data/achievements';
+import { deepLink, shareText } from '@/logic/feedback';
 import { fmtNum, progressOf } from '@/logic/stats';
 import { useStore } from '@/logic/store';
 import { base, space, tierColors } from '@/theme/theme';
@@ -24,6 +26,7 @@ export default function AchievementScreen() {
   const hidden = a.secret && !p.reached.length;
   const v = verificationText[a.verification];
   const onShowcase = equipped.showcase.includes(a.id);
+  const [shareMsg, setShareMsg] = useState<string | null>(null);
 
   return (
     <Screen bottomPad={40}>
@@ -97,6 +100,19 @@ export default function AchievementScreen() {
         ) : null}
       </Section>
 
+      {p.current && !hidden ? (
+        <Button
+          title="Поделиться"
+          icon="share-social"
+          kind="ghost"
+          onPress={async () => {
+            const r = await shareText(`Моя награда в Архызпарке: «${a.title}», ${tierColors[p.current!].label.toLowerCase()}. ${deepLink(`/achievement/${a.id}`)}`);
+            setShareMsg(r === 'unsupported' ? `Ссылка: ${deepLink(`/achievement/${a.id}`)}` : null);
+          }}
+          style={{ marginTop: space.xl }}
+        />
+      ) : null}
+      {shareMsg ? <T v="small" color={base.textDim} style={{ marginTop: space.s }} selectable>{shareMsg}</T> : null}
       {p.current ? (
         <Button
           title={onShowcase ? 'Уже на витрине профиля' : 'Поставить на витрину'}
@@ -104,7 +120,7 @@ export default function AchievementScreen() {
           kind={onShowcase ? 'ghost' : 'primary'}
           disabled={onShowcase}
           onPress={() => equip({ showcase: [a.id, ...equipped.showcase.filter((x) => x !== a.id)].slice(0, 3) })}
-          style={{ marginTop: space.xl }}
+          style={{ marginTop: space.s }}
         />
       ) : null}
     </Screen>

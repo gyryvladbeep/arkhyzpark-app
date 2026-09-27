@@ -2,7 +2,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { ElevationChart, ResortMap, ValleyMap } from '@/components/maps';
+import { ElevationChart, ResortMap, TrackView, ValleyMap } from '@/components/maps';
+import { trimEnds } from '@/logic/geo-math';
 import { BackHeader, Button, Card, Chip, Icon, Row, Screen, Section, Stat, T, usePalette } from '@/components/ui';
 import { levelName, routeById, trailById } from '@/data/geo';
 import { instructorById } from '@/data/mock';
@@ -78,7 +79,11 @@ function WinterView({ s }: { s: WinterSession }) {
       <T color={base.textDim} style={{ marginTop: 6 }}>{txt.body}</T>
 
       <View style={{ marginTop: space.l }}>
-        <ResortMap highlight={hl} dimOthers height={300} />
+        {s.track && s.track.length > 1 ? (
+          <SessionTrack s={s} color={pal.accent} />
+        ) : (
+          <ResortMap highlight={hl} dimOthers height={300} />
+        )}
       </View>
 
       <Card style={{ marginTop: space.m }}>
@@ -119,8 +124,8 @@ function WinterView({ s }: { s: WinterSession }) {
                 <T v="small" color={base.textMute} style={{ width: 20 }}>{i + 1}</T>
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: trailColors[t.level] }} />
                 <View style={{ flex: 1 }}>
-                  <T style={{ fontWeight: '600' }}>{t.name}</T>
-                  <T v="label" style={{ marginTop: 0 }}>{levelName[t.level]} · {fmtNum(r.dropM)} м</T>
+                  <T style={{ fontWeight: '600' }}>{t.id === 'gps' ? `Спуск ${i + 1}` : t.name}</T>
+                  <T v="label" style={{ marginTop: 0 }}>{t.id === 'gps' ? 'по GPS' : levelName[t.level]} · {fmtNum(r.dropM)} м</T>
                 </View>
                 <T v="small" color={base.textDim}>{fmtSec(r.durationSec)}</T>
                 <T v="small" style={{ fontWeight: '700', width: 64, textAlign: 'right' }}>{r.maxSpeed} км/ч</T>
@@ -142,7 +147,9 @@ function SummerView({ s }: { s: SummerSession }) {
   const [day, setDay] = useState(0);
   const d = s.days[day] ?? s.days[0];
   const txt = diaryText(s, 1);
-  const elev = Array.from({ length: 40 }, (_, i) => {
+  const { confirmGuide } = useStore();
+  const [justConfirmed, setJustConfirmed] = useState(0);
+  const elev = s.track && s.track.length > 1 ? s.track.map((p) => p[2]) : Array.from({ length: 40 }, (_, i) => {
     const f = i / 39;
     const up = f < 0.55 ? f / 0.55 : 1 - (f - 0.55) / 0.45;
     return 1650 + (d.maxAltM - 1650) * Math.max(0, up) + Math.sin(i * 1.7) * 18;
@@ -158,7 +165,11 @@ function SummerView({ s }: { s: SummerSession }) {
         </Row>
       ) : null}
       <View style={{ marginTop: space.l }}>
-        <ValleyMap highlight={r.id} height={300} />
+        {s.track && s.track.length > 1 ? (
+          <SessionTrack s={s} color={pal.accent} />
+        ) : (
+          <ValleyMap highlight={r.id} height={300} />
+        )}
       </View>
       <Card style={{ marginTop: space.m }}>
         <Row gap={space.m}>
@@ -178,10 +189,13 @@ function SummerView({ s }: { s: SummerSession }) {
         <Icon name={s.confirmedByGuide ? 'checkmark-circle' : 'time-outline'} size={22} color={s.confirmedByGuide ? base.green : base.warning} />
         <View style={{ flex: 1 }}>
           <T style={{ fontWeight: '700' }}>Гид: {instructorById(s.guideId).name}</T>
-          <T v="small" color={base.textDim}>{s.confirmedByGuide ? 'Прохождение маршрута подтверждено' : 'Ждёт подтверждения гида'}</T>
+          <T v="small" color={base.textDim}>{s.confirmedByGuide ? `Прохождение маршрута подтверждено${justConfirmed ? `, новых наград: ${justConfirmed}` : ''}` : 'Ждёт подтверждения гида'}</T>
         </View>
       </Card>
-      <Section title={`Фото с маршрута (${d.photos.length})`}>
+      {!s.confirmedByGuide ? (
+        <Button title="Демо: подтвердить как гид" icon="checkmark-done" kind="soft" onPress={() => setJustConfirmed(confirmGuide(s.id).length)} style={{ marginTop: space.s }} />
+      ) : null}
+      {d.photos.length ? <Section title={`Фото с маршрута (${d.photos.length})`}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
           {d.photos.slice(0, 9).map((p, i) => (
             <View key={i} style={{ width: '31.5%', aspectRatio: 1, borderRadius: radius.m, backgroundColor: base.surface2, borderWidth: 1, borderColor: base.border, alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -191,8 +205,29 @@ function SummerView({ s }: { s: SummerSession }) {
           ))}
         </View>
         <T v="label" style={{ marginTop: space.s }}>Каждое фото привязано к точке маршрута и высоте</T>
-      </Section>
+      </Section> : null}
       <Publish id={s.id} published={s.published} />
     </Screen>
+  );
+}
+
+// Трек записи. Для опубликованной записи можно посмотреть, как её видят другие: без первых и последних 200 м.
+function SessionTrack({ s, color }: { s: WinterSession | SummerSession; color: string }) {
+  const [publicView, setPublicView] = useState(false);
+  const pts = (s.track ?? []).map(([lat, lon]) => ({ lat, lon }));
+  const shown = publicView ? trimEnds(pts, 200) : pts;
+  return (
+    <View style={{ gap: space.s }}>
+      <Row gap={space.s}>
+        <Chip label="Мой трек" active={!publicView} onPress={() => setPublicView(false)} />
+        <Chip label="Как видят другие" icon="eye-outline" active={publicView} onPress={() => setPublicView(true)} />
+      </Row>
+      <TrackView points={shown} color={color} height={300} />
+      {publicView ? (
+        <T v="label">
+          {s.published ? 'Запись опубликована.' : 'Запись пока приватная.'} Первые и последние 200 м скрыты, чтобы по карте нельзя было найти ваш дом или отель.
+        </T>
+      ) : null}
+    </View>
   );
 }

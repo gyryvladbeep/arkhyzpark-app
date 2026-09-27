@@ -136,11 +136,11 @@ export const instructorById = (id: string) => instructors.find((i) => i.id === i
 export const initialBookings: BookingRequest[] = [
   {
     id: 'b1', instructorId: 'i2', date: '2026-01-04', time: '10:00', format: 'Индивидуально', participants: 1,
-    phone: '+7 900 000-00-00', comment: 'Первый раз на лыжах', status: 'Проведена', createdAt: '2025-12-20',
+    phone: '+7 900 000-00-00', comment: 'Первый раз на лыжах', status: 'Проведена', createdAt: '2025-12-20', idempotencyKey: 'demo-b1',
   },
   {
     id: 'b2', instructorId: 'g2', date: '2026-08-09', time: '07:00', format: 'Группа', participants: 3,
-    phone: '+7 900 000-00-00', comment: '', status: 'Проведена', createdAt: '2026-08-01',
+    phone: '+7 900 000-00-00', comment: '', status: 'Проведена', createdAt: '2026-08-01', idempotencyKey: 'demo-b2',
   },
 ];
 

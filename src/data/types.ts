@@ -43,11 +43,17 @@ export interface Run {
   avgSpeed: number;
   durationSec: number;
   dropM: number;
+  distanceM?: number; // для спусков по GPS: реальная длина
 }
+
+// Точка сохранённого трека: широта, долгота, высота
+export type StoredPoint = [number, number, number];
 
 export interface WinterSession {
   id: string;
   season: 'winter';
+  source?: 'demo' | 'gps';
+  track?: StoredPoint[];
   date: string;
   gear: Gear;
   runs: Run[];
@@ -73,6 +79,8 @@ export interface HikeDay {
 export interface SummerSession {
   id: string;
   season: 'summer';
+  source?: 'demo' | 'gps';
+  track?: StoredPoint[];
   date: string;
   routeId: string;
   guideId: string;
@@ -153,8 +161,12 @@ export interface BookingRequest {
   participants: number;
   phone: string;
   comment: string;
-  status: 'Отправлена' | 'Подтверждена' | 'Проведена';
+  status: 'В очереди' | 'Отправлена' | 'Подтверждена' | 'Проведена';
   createdAt: string;
+  idempotencyKey: string; // уникальный ключ заявки: защищает от дублей при повторной отправке
+  attempts?: number; // сколько раз пытались отправить
+  nextTryAt?: number; // когда следующая попытка (время, мс)
+  lastError?: string;
 }
 
 export interface ChatMessage {

@@ -21,16 +21,17 @@ export function Icon({ name, size = 20, color = base.text }: { name: string; siz
 }
 
 export function T({
-  children, style, v = 'body', color, numberOfLines,
+  children, style, v = 'body', color, numberOfLines, selectable,
 }: {
   children: ReactNode;
   style?: StyleProp<TextStyle>;
   v?: 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'label' | 'num';
   color?: string;
   numberOfLines?: number;
+  selectable?: boolean;
 }) {
   return (
-    <Text numberOfLines={numberOfLines} style={[styles[v], color ? { color } : null, style]}>
+    <Text numberOfLines={numberOfLines} selectable={selectable} style={[styles[v], color ? { color } : null, style]}>
       {children}
     </Text>
   );

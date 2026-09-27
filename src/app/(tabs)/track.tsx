@@ -1,26 +1,50 @@
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 
 import { ElevationChart, ResortMap, ValleyMap } from '@/components/maps';
-import { AchievementBadge, Button, Card, Chip, DemoNote, Icon, Row, Screen, SeasonToggle, Stat, T, usePalette } from '@/components/ui';
+import { Finished, type Unlocked } from '@/components/finished';
+import { GpsTracker } from '@/components/gps-tracker';
+import { Button, Card, Chip, DemoNote, Icon, Row, Screen, SeasonToggle, Stat, T, usePalette } from '@/components/ui';
 import { altAt, lifts, pointAlong, routeById, routes, trailById, village } from '@/data/geo';
 import { instructorById, makeRun, requiredGear } from '@/data/mock';
-import type { Achievement, AchievementTier, Gear, HikeDay, Point, Run } from '@/data/types';
+import type { Gear, HikeDay, Point, Run } from '@/data/types';
+import { notifyAchievements } from '@/logic/notify';
 import { fmtKm, fmtMin, fmtNum } from '@/logic/stats';
 import { useStore } from '@/logic/store';
-import { base, radius, space, tierColors } from '@/theme/theme';
+import { base, space, tierColors } from '@/theme/theme';
 
 const DEMO_PLAN = ['t3', 't6', 't4', 't3', 't6', 't5', 't6'];
 const TICK = 110;
 const LIFT_STEPS = 22;
 const RUN_STEPS = 38;
 
-type Unlocked = { a: Achievement; t: AchievementTier }[];
+export type TrackMode = 'gps' | 'demo';
+
+const ModeCtx = createContext<{ mode: TrackMode; setMode: (m: TrackMode) => void }>({ mode: 'gps', setMode: () => {} });
+
+const notifyUnlocked = (u: Unlocked) =>
+  notifyAchievements(u.map(({ a, t }) => ({ title: a.title, tier: tierColors[t.tier].label, id: a.id })));
 
 export default function TrackScreen() {
   const { season } = useStore();
-  return season === 'winter' ? <WinterTracker /> : <SummerTracker />;
+  const [mode, setMode] = useState<TrackMode>('gps');
+  return (
+    <ModeCtx.Provider value={{ mode, setMode }}>
+      {mode === 'gps' ? <GpsTracker key={season} modeSwitch={<ModeSwitch />} /> : season === 'winter' ? <WinterTracker /> : <SummerTracker />}
+    </ModeCtx.Provider>
+  );
+}
+
+// Переключатель: настоящий GPS или демо-симуляция
+function ModeSwitch() {
+  const { mode, setMode } = useContext(ModeCtx);
+  return (
+    <Row gap={space.s} style={{ marginBottom: space.l }}>
+      <Chip label="GPS" icon="navigate" active={mode === 'gps'} onPress={() => setMode('gps')} />
+      <Chip label="Демо-симуляция" icon="play-forward" active={mode === 'demo'} onPress={() => setMode('demo')} />
+    </Row>
+  );
 }
 
 function Header({ title }: { title: string }) {
@@ -113,6 +137,7 @@ function WinterTracker() {
       },
       useInstr ? { lessons: 1 } : undefined,
     );
+    notifyUnlocked(unlocked);
     setResult({ unlocked, runs: done });
     setState('done');
   };
@@ -130,6 +155,7 @@ function WinterTracker() {
       <Header title="Трекер" />
       {state === 'idle' ? (
         <>
+          <ModeSwitch />
           <Card style={{ flexDirection: 'row', gap: space.m, alignItems: 'center', marginBottom: space.l }} accent={pal.accent}>
             <Icon name="location" size={22} color={pal.accentText} />
             <View style={{ flex: 1 }}>
@@ -276,6 +302,7 @@ function SummerTracker() {
       },
       ready === 100 ? { readyHikes: 1 } : undefined,
     );
+    notifyUnlocked(res);
     setUnlocked(res);
     setState('done');
   };
@@ -309,6 +336,7 @@ function SummerTracker() {
       <Header title="Трекер" />
       {state === 'idle' ? (
         <>
+          <ModeSwitch />
           <T v="small" color={base.textDim} style={{ marginBottom: space.s, fontWeight: '600' }}>МАРШРУТ С ГИДОМ АРХЫЗПАРКА</T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.s }}>
             {routes.map((r) => (
@@ -416,47 +444,3 @@ function SummerTracker() {
   );
 }
 
-// ---------------- ИТОГ ----------------
-
-function Finished({ unlocked, lines, onAgain }: { unlocked: Unlocked; lines: [string, string][]; onAgain: () => void }) {
-  const pal = usePalette();
-  const { sessions } = useStore();
-  return (
-    <Screen>
-      <View style={{ alignItems: 'center', marginTop: space.xl }}>
-        <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: pal.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="checkmark" size={40} color={pal.accentText} />
-        </View>
-        <T v="h2" style={{ marginTop: space.m }}>Запись сохранена</T>
-        <T color={base.textDim} style={{ marginTop: 4 }}>Новая страница уже в дневнике</T>
-      </View>
-      <Card style={{ marginTop: space.xl }}>
-        <Row gap={space.m}>
-          {lines.map(([l, v]) => <Stat key={l} label={l} value={v} />)}
-        </Row>
-      </Card>
-      <T v="h3" style={{ marginTop: space.xl, marginBottom: space.m }}>
-        {unlocked.length ? `Новые награды: ${unlocked.length}` : 'Новых наград пока нет'}
-      </T>
-      {unlocked.length === 0 ? (
-        <Card><T color={base.textDim}>Прогресс по достижениям обновлён. Загляните во вкладку «Награды».</T></Card>
-      ) : (
-        <View style={{ gap: space.m }}>
-          {unlocked.map(({ a, t }) => (
-            <Card key={a.id + t.tier} onPress={() => router.push({ pathname: '/achievement/[id]', params: { id: a.id } })} accent={tierColors[t.tier].main} style={{ flexDirection: 'row', gap: space.m, alignItems: 'center' }}>
-              <AchievementBadge icon={a.icon} tier={t.tier} size={56} />
-              <View style={{ flex: 1 }}>
-                <T style={{ fontWeight: '700' }}>{a.title}</T>
-                <T v="small" color={tierColors[t.tier].main} style={{ fontWeight: '700' }}>{tierColors[t.tier].label}</T>
-                {t.prize ? <T v="small" color={base.warning}>Приз: {t.prize}</T> : null}
-              </View>
-            </Card>
-          ))}
-        </View>
-      )}
-      <Button title="Открыть запись" icon="book" onPress={() => router.push({ pathname: '/session/[id]', params: { id: sessions[0].id } })} style={{ marginTop: space.xl }} />
-      <Button title="Новая запись" kind="ghost" onPress={onAgain} style={{ marginTop: space.s }} />
-      <View style={{ height: 1, marginTop: radius.s }} />
-    </Screen>
-  );
-}

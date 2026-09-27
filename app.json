@@ -2,13 +2,14 @@
   "expo": {
     "name": "Архызпарк",
     "slug": "arkhyzpark-app",
-    "version": "1.0.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "arkhyzpark",
     "userInterfaceStyle": "dark",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "ru.arkhyzpark.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "ru.arkhyzpark.app"
     },
     "web": {
       "output": "single",
@@ -33,6 +35,23 @@
           "backgroundColor": "#0A0E13",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Архызпарк записывает трассы, скорость и перепад высоты во время катания и походов.",
+          "locationAlwaysAndWhenInUsePermission": "Разрешите доступ «Всегда», чтобы запись катания продолжалась, когда телефон лежит в кармане с выключенным экраном.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "locationAlwaysPermission": "Разрешите доступ «Всегда», чтобы запись катания продолжалась с выключенным экраном."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#3D9BFF"
         }
       ]
     ],
